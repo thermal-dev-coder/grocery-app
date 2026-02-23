@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import re
 import sqlite3
 import time
 import urllib.parse
@@ -20,29 +21,52 @@ def similarity(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
+def normalize_name(name: str):
+    s = (name or '').lower()
+    s = s.replace('®', ' ').replace('™', ' ').replace("’", "'")
+    s = re.sub(r"\([^)]*\)", " ", s)
+    s = re.sub(r"\b\d+(?:[\.,]\d+)?\s*(oz|fl\s*oz|lb|ct|ea|each|g|kg|ml|l|gal|pt)\b", " ", s)
+    s = re.sub(r"\b(organic|fresh|family\s*size|large|small|mini|original|single|individual|bag|pack|vp|no\s*salt)\b", " ", s)
+    s = re.sub(r"[^a-z0-9\s\-']", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
 def search_openfoodfacts(product_name):
-    q = urllib.parse.quote(product_name)
-    url = (
-        "https://world.openfoodfacts.org/cgi/search.pl"
-        f"?search_terms={q}&search_simple=1&action=process&json=1&page_size=5"
-    )
-    try:
-        data = http_json(url)
-    except Exception:
-        return None
-    products = data.get("products", [])
+    variants = [product_name]
+    n = normalize_name(product_name)
+    if n and n != product_name:
+        variants.append(n)
+    tokens = n.split()
+    if len(tokens) > 4:
+        variants.append(' '.join(tokens[:4]))
+
     best = None
     best_score = 0.0
-
-    for p in products:
-        name = (p.get("product_name") or "").strip()
-        if not name:
+    for v in variants:
+        q = urllib.parse.quote(v)
+        url = (
+            "https://world.openfoodfacts.org/cgi/search.pl"
+            f"?search_terms={q}&search_simple=1&action=process&json=1&page_size=8"
+        )
+        try:
+            data = http_json(url)
+        except Exception:
             continue
-        score = similarity(product_name, name)
-        image_url = p.get("image_front_small_url") or p.get("image_front_url") or p.get("image_url")
-        if image_url and score > best_score:
-            best = (image_url, name, score)
-            best_score = score
+        products = data.get("products", [])
+
+        for p in products:
+            name = (p.get("product_name") or "").strip()
+            if not name:
+                continue
+            score = max(
+                similarity(product_name, name),
+                similarity(normalize_name(product_name), normalize_name(name))
+            )
+            image_url = p.get("image_front_small_url") or p.get("image_front_url") or p.get("image_url")
+            if image_url and score > best_score:
+                best = (image_url, name, score)
+                best_score = score
 
     return best
 
