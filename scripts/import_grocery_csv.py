@@ -83,11 +83,12 @@ def main():
             if not raw_name:
                 continue
 
-            size = (r.get('Tamaño / Cantidad') or '').strip() or None
-            cur_price = parse_price(r.get('Precio Actual') or '')
+            size = (r.get('Tamaño/Cantidad') or r.get('Tamaño / Cantidad') or '').strip() or None
+            price_col = (r.get('Precio') or r.get('Precio Actual') or '').strip()
+            cur_price = parse_price(price_col)
             notes_col = (r.get('Precio Original / Notas') or '').strip()
             orig_price = parse_price(notes_col)
-            notes = notes_col if notes_col else None
+            notes = notes_col if notes_col else (price_col if any(x in price_col.lower() for x in ['est', '/lb', 'variable']) else None)
 
             canonical = raw_name  # normalization step comes later
             cur.execute('INSERT OR IGNORE INTO products(canonical_name, size_text) VALUES (?,?)', (canonical, size))
