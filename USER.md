@@ -6,7 +6,7 @@ _Learn about the person you're helping. Update this as you go._
 - **What to call them:** Rafa
 - **Pronouns:** _(optional)_
 - **Timezone:** America/Phoenix (Arizona)
-- **Notes:** Prefiere interacción directa y práctica.
+- **Notes:** Prefiere interacción directa y práctica. Idioma principal: español. Tono preferido: directo + técnico.
 
 ## Context
 
