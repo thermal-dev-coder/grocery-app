@@ -98,6 +98,60 @@ def search_wikipedia(product_name):
     return best
 
 
+GENERIC_KEYWORD_IMAGES = {
+    "banana": "https://upload.wikimedia.org/wikipedia/commons/8/8a/Banana-Single.jpg",
+    "apple": "https://upload.wikimedia.org/wikipedia/commons/1/15/Red_Apple.jpg",
+    "tomato": "https://upload.wikimedia.org/wikipedia/commons/8/89/Tomato_je.jpg",
+    "onion": "https://upload.wikimedia.org/wikipedia/commons/2/25/Onion_on_White.JPG",
+    "potato": "https://upload.wikimedia.org/wikipedia/commons/6/60/Patates.jpg",
+    "cucumber": "https://upload.wikimedia.org/wikipedia/commons/9/96/ARS_cucumber.jpg",
+    "bell pepper": "https://upload.wikimedia.org/wikipedia/commons/8/85/Assorted_peppers.jpg",
+    "pepper": "https://upload.wikimedia.org/wikipedia/commons/8/85/Assorted_peppers.jpg",
+    "strawberry": "https://upload.wikimedia.org/wikipedia/commons/2/29/PerfectStrawberry.jpg",
+    "blueberries": "https://upload.wikimedia.org/wikipedia/commons/1/13/Blueberries.jpg",
+    "blueberry": "https://upload.wikimedia.org/wikipedia/commons/1/13/Blueberries.jpg",
+    "avocado": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Avocado_Hass_-_single_and_halved.jpg",
+    "lemon": "https://upload.wikimedia.org/wikipedia/commons/c/c6/Lemon-Whole-Split.jpg",
+    "orange": "https://upload.wikimedia.org/wikipedia/commons/c/c4/Orange-Fruit-Pieces.jpg",
+    "cilantro": "https://upload.wikimedia.org/wikipedia/commons/2/2f/Coriandrum_sativum_-_K%C3%B6hler%E2%80%93s_Medizinal-Pflanzen-193.jpg",
+    "parsley": "https://upload.wikimedia.org/wikipedia/commons/0/0f/Petroselinum_crispum2.jpg",
+    "carrot": "https://upload.wikimedia.org/wikipedia/commons/7/70/Carrot_on_White.JPG",
+    "eggplant": "https://upload.wikimedia.org/wikipedia/commons/f/fb/Aubergine.jpg",
+    "squash": "https://upload.wikimedia.org/wikipedia/commons/5/59/Cucurbita_moschata_Butternut_20051011_203.jpg",
+    "chayote": "https://upload.wikimedia.org/wikipedia/commons/f/f1/Chayote_BNC.jpg",
+    "grapes": "https://upload.wikimedia.org/wikipedia/commons/b/bb/Table_grapes_on_white.jpg",
+    "mango": "https://upload.wikimedia.org/wikipedia/commons/9/90/Hapus_Mango.jpg",
+    "corn": "https://upload.wikimedia.org/wikipedia/commons/7/72/Maize_stalk.jpg",
+    "milk": "https://upload.wikimedia.org/wikipedia/commons/a/a4/Milk_glass.jpg",
+    "bread": "https://upload.wikimedia.org/wikipedia/commons/d/d1/Loaf_of_bread.jpg",
+    "cheese": "https://upload.wikimedia.org/wikipedia/commons/4/44/Cheese_platter.jpg",
+    "yogurt": "https://upload.wikimedia.org/wikipedia/commons/3/37/Yogurt.jpg",
+    "butter": "https://upload.wikimedia.org/wikipedia/commons/0/0e/Butter_on_spoon.jpg",
+    "rice": "https://upload.wikimedia.org/wikipedia/commons/6/6f/Rice_grains_%28IRRI%29.jpg",
+    "pasta": "https://upload.wikimedia.org/wikipedia/commons/4/4f/Fusilli_pasta.jpg",
+    "tortilla": "https://upload.wikimedia.org/wikipedia/commons/2/2c/Flour_tortillas.jpg",
+    "beans": "https://upload.wikimedia.org/wikipedia/commons/5/5f/Black_beans.jpg",
+    "shrimp": "https://upload.wikimedia.org/wikipedia/commons/8/82/Shrimps.jpg",
+    "tuna": "https://upload.wikimedia.org/wikipedia/commons/d/d7/Thunnus_albacares.jpg",
+    "chicken": "https://upload.wikimedia.org/wikipedia/commons/3/32/Chicken_breast.png",
+    "beef": "https://upload.wikimedia.org/wikipedia/commons/9/91/Raw_beef.png",
+    "pork": "https://upload.wikimedia.org/wikipedia/commons/0/01/Pork_meat.jpg",
+    "honey": "https://upload.wikimedia.org/wikipedia/commons/5/52/Honey_%28food%29.jpg",
+    "vinegar": "https://upload.wikimedia.org/wikipedia/commons/0/06/White_vinegar.jpg",
+    "kombucha": "https://upload.wikimedia.org/wikipedia/commons/3/3e/Kombucha_Mature.jpg",
+    "salt": "https://upload.wikimedia.org/wikipedia/commons/5/5d/Salt_shaker_on_white_background.jpg",
+    "sugar": "https://upload.wikimedia.org/wikipedia/commons/7/70/Sugar_cubes.jpg",
+}
+
+
+def generic_fallback_image(product_name: str):
+    n = normalize_name(product_name)
+    for k, v in GENERIC_KEYWORD_IMAGES.items():
+        if k in n:
+            return v, k, 0.35
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(description="Enrich product images in grocery.db")
     ap.add_argument("--db", default="data/grocery.db")
@@ -115,7 +169,7 @@ def main():
     rows = cur.fetchall()
 
     updated = 0
-    source_counts = {"openfoodfacts": 0, "wikipedia": 0}
+    source_counts = {"openfoodfacts": 0, "wikipedia": 0, "generic": 0}
     skipped = 0
 
     for pid, name in rows:
@@ -134,6 +188,11 @@ def main():
                 url, matched_name, score = wh
                 source = "wikipedia"
                 conf = round(min(0.85, 0.45 + score * 0.35), 3)
+            else:
+                gh = generic_fallback_image(name)
+                if gh:
+                    url, matched_name, conf = gh
+                    source = "generic"
 
         if source and url:
             cur.execute(
