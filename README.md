@@ -37,3 +37,7 @@ App web para gestionar compras de supermercado con foco móvil.
 ```bash
 npx firebase-tools deploy --only hosting --project rafa-grocery-app-2026-73dad --token "$FIREBASE_TOKEN"
 ```
+
+## Notas
+- El repo ignora archivos personales y credenciales (`IDENTITY.md`, `USER.md`, `.env`, claves, etc.).
+- Recomendado: migrar a Service Account para CI/CD en lugar de token manual.
