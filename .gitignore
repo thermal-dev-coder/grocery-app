@@ -1,0 +1,24 @@
+# Personal assistant context (never commit)
+IDENTITY.md
+USER.md
+MEMORY.md
+memory/
+
+# Credentials / secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*.json
+service-account*.json
+firebase-debug.log
+
+# Firebase local cache
+.firebase/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
