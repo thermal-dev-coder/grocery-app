@@ -71,6 +71,42 @@ def search_openfoodfacts(product_name):
     return best
 
 
+def search_openverse(product_name):
+    variants = [product_name]
+    n = normalize_name(product_name)
+    if n and n != product_name:
+        variants.append(n)
+    tokens = n.split()
+    if len(tokens) > 4:
+        variants.append(' '.join(tokens[:4]))
+
+    best = None
+    best_score = 0.0
+    for v in variants:
+        q = urllib.parse.quote(v)
+        url = (
+            "https://api.openverse.org/v1/images/"
+            f"?q={q}&page_size=8&license_type=commercial&extension=jpg&extension=jpeg&extension=png"
+        )
+        try:
+            data = http_json(url, timeout=8)
+        except Exception:
+            continue
+        for item in data.get("results", []):
+            title = (item.get("title") or "").strip()
+            img = item.get("url")
+            if not title or not img:
+                continue
+            score = max(
+                similarity(product_name, title),
+                similarity(normalize_name(product_name), normalize_name(title)),
+            )
+            if score > best_score:
+                best_score = score
+                best = (img, title, score)
+    return best
+
+
 def search_wikipedia(product_name):
     q = urllib.parse.quote(product_name)
     url = (
@@ -169,7 +205,7 @@ def main():
     rows = cur.fetchall()
 
     updated = 0
-    source_counts = {"openfoodfacts": 0, "wikipedia": 0, "generic": 0}
+    source_counts = {"openfoodfacts": 0, "openverse": 0, "wikipedia": 0, "generic": 0}
     skipped = 0
 
     for pid, name in rows:
@@ -183,16 +219,22 @@ def main():
             source = "openfoodfacts"
             conf = round(min(0.95, 0.55 + score * 0.4), 3)
         else:
-            wh = search_wikipedia(name)
-            if wh and wh[2] >= 0.45:
-                url, matched_name, score = wh
-                source = "wikipedia"
-                conf = round(min(0.85, 0.45 + score * 0.35), 3)
+            ov = search_openverse(name)
+            if ov and ov[2] >= 0.33:
+                url, matched_name, score = ov
+                source = "openverse"
+                conf = round(min(0.82, 0.38 + score * 0.35), 3)
             else:
-                gh = generic_fallback_image(name)
-                if gh:
-                    url, matched_name, conf = gh
-                    source = "generic"
+                wh = search_wikipedia(name)
+                if wh and wh[2] >= 0.45:
+                    url, matched_name, score = wh
+                    source = "wikipedia"
+                    conf = round(min(0.85, 0.45 + score * 0.35), 3)
+                else:
+                    gh = generic_fallback_image(name)
+                    if gh:
+                        url, matched_name, conf = gh
+                        source = "generic"
 
         if source and url:
             cur.execute(
