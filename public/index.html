@@ -34,11 +34,9 @@
 
   <div class="top">
     <input id="q" placeholder="Buscar producto..." />
-    <select id="storeFilter">
-      <option value="all">Todas las tiendas</option>
-      <option value="sprouts">Solo Sprouts</option>
-      <option value="frys">Solo Fry's</option>
-    </select>
+    <button id="btnSprouts">Ver Sprouts</button>
+    <button id="btnFrys">Ver Fry's</button>
+    <button id="btnAll">Ver todas</button>
     <button id="clearOverrides">Limpiar ediciones locales</button>
   </div>
   <div class="small">Las ediciones manuales se guardan en este navegador.</div>
@@ -74,7 +72,7 @@ let data=[];
 let currentEditId=null;
 const grid=document.getElementById('grid');
 const q=document.getElementById('q');
-const storeFilter=document.getElementById('storeFilter');
+let activeStore='all';
 const modalBg=document.getElementById('modalBg');
 const editName=document.getElementById('editName');
 const editImage=document.getElementById('editImage');
@@ -92,7 +90,7 @@ function mergedProducts(){
 
 function filterProducts(items){
   const s=q.value.toLowerCase().trim();
-  const sf=storeFilter.value;
+  const sf=activeStore;
   return items.filter(p=>{
     const byText = !s || (p.canonical_name||'').toLowerCase().includes(s);
     const stores=(p.stores||'').toLowerCase();
@@ -172,7 +170,9 @@ document.getElementById('clearOverrides').onclick=()=>{
 };
 
 q.addEventListener('input',render);
-storeFilter.addEventListener('change',render);
+document.getElementById('btnSprouts').addEventListener('click',()=>{activeStore='sprouts';render();});
+document.getElementById('btnFrys').addEventListener('click',()=>{activeStore='frys';render();});
+document.getElementById('btnAll').addEventListener('click',()=>{activeStore='all';render();});
 
 fetch('./data.json').then(r=>r.json()).then(j=>{
   data=j.products||[];
