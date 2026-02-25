@@ -1,10 +1,183 @@
-<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Rafa Grocery Dashboard</title>
-<style>body{font-family:Arial;margin:16px;background:#f6f7fb}input{padding:10px;width:100%;max-width:520px;border:1px solid #ccc;border-radius:8px}#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:14px}.card{background:#fff;border-radius:10px;padding:10px;box-shadow:0 1px 4px rgba(0,0,0,.08)}img{width:100%;height:130px;object-fit:cover;border-radius:8px;background:#eee}.name{font-weight:700;font-size:14px;margin:8px 0 4px}.meta{font-size:12px;color:#555}</style>
-</head><body><h2>Rafa Grocery Dashboard</h2><div id='stats'>Cargando...</div><input id='q' placeholder='Buscar producto...'/><div id='grid'></div>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Rafa Grocery Dashboard</title>
+  <style>
+    body{font-family:Arial,sans-serif;margin:16px;background:#f6f7fb;color:#111}
+    .top{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    input,select,button{padding:10px;border:1px solid #ccc;border-radius:8px;background:#fff}
+    input{min-width:240px}
+    button{cursor:pointer}
+    #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:14px}
+    .card{background:#fff;border-radius:10px;padding:10px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+    img{width:100%;height:130px;object-fit:cover;border-radius:8px;background:#eee}
+    .name{font-weight:700;font-size:14px;margin:8px 0 4px}
+    .meta{font-size:12px;color:#555;line-height:1.35}
+    .actions{display:flex;justify-content:flex-end;margin-top:8px}
+    .small{font-size:12px;color:#666}
+    .chip{display:inline-block;padding:2px 6px;border-radius:999px;background:#eef3ff;border:1px solid #d8e2ff;font-size:11px;color:#345}
+
+    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:14px}
+    .modal{background:#fff;max-width:520px;width:100%;border-radius:12px;padding:14px}
+    .modal h3{margin:2px 0 10px}
+    .row{display:flex;flex-direction:column;gap:4px;margin:8px 0}
+    .row label{font-size:12px;color:#444}
+    .row input{width:100%;min-width:0}
+    .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+  </style>
+</head>
+<body>
+  <h2>Rafa Grocery Dashboard</h2>
+  <div id="stats">Cargando...</div>
+
+  <div class="top">
+    <input id="q" placeholder="Buscar producto..." />
+    <select id="storeFilter">
+      <option value="all">Todas las tiendas</option>
+      <option value="sprouts">Solo Sprouts</option>
+      <option value="frys">Solo Fry's</option>
+    </select>
+    <button id="clearOverrides">Limpiar ediciones locales</button>
+  </div>
+  <div class="small">Las ediciones manuales se guardan en este navegador.</div>
+
+  <div id="grid"></div>
+
+  <div id="modalBg" class="modal-bg">
+    <div class="modal">
+      <h3>Editar producto</h3>
+      <div class="row">
+        <label>Nombre</label>
+        <input id="editName" />
+      </div>
+      <div class="row">
+        <label>URL de imagen</label>
+        <input id="editImage" />
+      </div>
+      <div class="row">
+        <label>Tamaño / Cantidad</label>
+        <input id="editSize" />
+      </div>
+      <div class="modal-actions">
+        <button id="resetOne">Reset producto</button>
+        <button id="cancelEdit">Cancelar</button>
+        <button id="saveEdit">Guardar</button>
+      </div>
+    </div>
+  </div>
+
 <script>
-let data=[];const grid=document.getElementById('grid');const q=document.getElementById('q');
-function render(items){grid.innerHTML=items.slice(0,200).map(p=>`<div class='card'><img src='${p.image_url||"https://via.placeholder.com/300x180?text=No+Image"}'/><div class='name'>${p.canonical_name}</div><div class='meta'>Compras: ${p.times_bought} · Avg: $${p.avg_price||'-'}<br/>Tiendas: ${p.stores||'-'}<br/>Fuente img: ${p.image_source||'-'}</div></div>`).join('')}
-fetch('./data.json').then(r=>r.json()).then(j=>{data=j.products;const withImg=data.filter(x=>x.image_url).length;document.getElementById('stats').innerText=`Productos: ${j.count} · Con imagen: ${withImg}`;render(data);});
-q.addEventListener('input',()=>{const s=q.value.toLowerCase().trim();if(!s)return render(data);render(data.filter(p=>p.canonical_name.toLowerCase().includes(s)));});
-</script></body></html>
+const PLACEHOLDER='https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png';
+let data=[];
+let currentEditId=null;
+const grid=document.getElementById('grid');
+const q=document.getElementById('q');
+const storeFilter=document.getElementById('storeFilter');
+const modalBg=document.getElementById('modalBg');
+const editName=document.getElementById('editName');
+const editImage=document.getElementById('editImage');
+const editSize=document.getElementById('editSize');
+
+function getOverrides(){
+  try{return JSON.parse(localStorage.getItem('groceryOverrides')||'{}')}catch{return {}}
+}
+function setOverrides(v){localStorage.setItem('groceryOverrides',JSON.stringify(v))}
+
+function mergedProducts(){
+  const ov=getOverrides();
+  return data.map(p=>({ ...p, ...(ov[p.id]||{}) }));
+}
+
+function filterProducts(items){
+  const s=q.value.toLowerCase().trim();
+  const sf=storeFilter.value;
+  return items.filter(p=>{
+    const byText = !s || (p.canonical_name||'').toLowerCase().includes(s);
+    const stores=(p.stores||'').toLowerCase();
+    const byStore = sf==='all' || stores.includes(sf);
+    return byText && byStore;
+  });
+}
+
+function render(){
+  const items=filterProducts(mergedProducts());
+  const withImg=mergedProducts().filter(x=>x.image_url).length;
+  document.getElementById('stats').innerText=`Productos: ${data.length} · Con imagen: ${withImg} · Mostrando: ${items.length}`;
+
+  grid.innerHTML=items.slice(0,300).map(p=>`
+    <div class='card'>
+      <img src='${p.image_url||PLACEHOLDER}' onerror="this.src='${PLACEHOLDER}'"/>
+      <div class='name'>${p.canonical_name||'-'}</div>
+      <div class='meta'>
+        Compras: ${p.times_bought||0} · Avg: $${p.avg_price||'-'}<br/>
+        Tiendas: ${p.stores||'-'}<br/>
+        Tamaño: ${p.size_text||'-'}<br/>
+        Fuente img: ${p.image_source||'-'}
+      </div>
+      <div class='actions'>
+        <button onclick='openEdit(${p.id})'>Editar</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.openEdit = function(id){
+  currentEditId=id;
+  const p=mergedProducts().find(x=>x.id===id);
+  if(!p) return;
+  editName.value=p.canonical_name||'';
+  editImage.value=p.image_url||'';
+  editSize.value=p.size_text||'';
+  modalBg.style.display='flex';
+}
+
+function closeModal(){
+  modalBg.style.display='none';
+  currentEditId=null;
+}
+
+document.getElementById('cancelEdit').onclick=closeModal;
+modalBg.onclick=(e)=>{ if(e.target===modalBg) closeModal(); };
+
+document.getElementById('saveEdit').onclick=()=>{
+  if(currentEditId==null) return;
+  const ov=getOverrides();
+  ov[currentEditId]={
+    canonical_name: editName.value.trim(),
+    image_url: editImage.value.trim(),
+    size_text: editSize.value.trim(),
+    image_source: 'manual',
+    image_confidence: 1
+  };
+  setOverrides(ov);
+  closeModal();
+  render();
+};
+
+document.getElementById('resetOne').onclick=()=>{
+  if(currentEditId==null) return;
+  const ov=getOverrides();
+  delete ov[currentEditId];
+  setOverrides(ov);
+  closeModal();
+  render();
+};
+
+document.getElementById('clearOverrides').onclick=()=>{
+  if(!confirm('¿Borrar todas las ediciones locales manuales?')) return;
+  localStorage.removeItem('groceryOverrides');
+  render();
+};
+
+q.addEventListener('input',render);
+storeFilter.addEventListener('change',render);
+
+fetch('./data.json').then(r=>r.json()).then(j=>{
+  data=j.products||[];
+  render();
+});
+</script>
+</body>
+</html>
